@@ -84,8 +84,7 @@
         .light .coord { color: #769656; }
         .dark .coord { color: #eeeed2; }
         
-        .piece-commander { filter: drop-shadow(0 0 8px #fbbf24); }
-        .piece-evolved-commander { filter: drop-shadow(0 0 16px #ef4444); }
+        .piece-pawn-evolved { filter: drop-shadow(0 0 16px #ff0000); }
         .piece-invulnerable { filter: drop-shadow(0 0 12px #22d3ee); background: rgba(34, 211, 238, 0.3); border-radius: 50%; }
 
         /* Custom Scrollbar */
@@ -107,7 +106,10 @@
                 <span id="game-status" class="text-sm font-bold text-white">White's Turn</span>
                 <span id="check-warning" class="hidden px-2 py-0.5 bg-red-500 text-white text-[10px] font-black rounded-full animate-pulse">CHECK</span>
             </div>
-            <span id="move-count" class="text-xs text-zinc-500 font-mono">Moves: 0</span>
+            <div class="flex flex-col items-end">
+                <span id="move-count" class="text-xs text-zinc-500 font-mono">Moves: 0</span>
+                <span id="game-result" class="text-xs font-bold text-yellow-400 hidden mt-1"></span>
+            </div>
         </div>
 
         <!-- Opponent Info -->
@@ -162,18 +164,6 @@
         </button>
     </footer>
 
-    <!-- Game Over Modal -->
-    <div id="game-over-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-6 backdrop-blur-sm">
-        <div class="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 max-w-sm w-full text-center shadow-2xl">
-            <div class="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z"></path></svg>
-            </div>
-            <h2 id="modal-title" class="text-3xl font-black text-white mb-2 tracking-tight">Checkmate!</h2>
-            <p id="modal-desc" class="text-zinc-400 mb-8 font-medium">White has won the match.</p>
-            <button id="modal-reset" class="w-full py-5 bg-white text-black font-black rounded-2xl hover:bg-zinc-200 transition-all btn-active text-lg shadow-xl shadow-white/5">New Match</button>
-        </div>
-    </div>
-
     <!-- History Modal -->
     <div id="history-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-md h-[70vh] shadow-2xl overflow-hidden">
@@ -201,11 +191,15 @@
             <div class="flex-grow overflow-y-auto custom-scroll p-5 text-sm text-zinc-300 space-y-5">
                 <div class="flex items-start gap-4">
                     <img src="chess_white_queen.png" class="w-9 h-9 object-contain shrink-0" alt="Queen">
-                    <p><strong class="text-white">Promotion:</strong> Reach the opposite end of the board to promote pieces and gain special abilities! Normal pawns promote to standard Queens.</p>
+                    <p><strong class="text-white">Promotion:</strong> Reach the opposite end of the board to promote pieces and gain special abilities! Normal pawns promote to non-evolvable pieces. The options are queen, rook, bischop and knight.</p>
                 </div>
                 <div class="flex items-start gap-4">
-                    <img src="chess_white_commander.png" class="w-9 h-9 object-contain shrink-0 piece-commander" alt="Commander">
-                    <p><strong class="text-yellow-400">Commander:</strong> Starts on a random back-rank file. Moves like a King + Pawn. Promotes to <strong class="text-red-400 drop-shadow-[0_0_8px_#ef4444]">Promoted Commander</strong>: Can teleport onto any enemy pawn and capture it.</p>
+                    <img src="chess_white_commander.png" class="w-9 h-9 object-contain shrink-0" alt="Commander">
+                    <p><strong class="text-white">Commander:</strong> Starts on a random back-rank file. Moves like a King + Pawn. Promotes to an Assassin or any other evolved piece.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_assassin.png" class="w-9 h-9 object-contain shrink-0" alt="Assassin">
+                    <p><strong class="text-white">Assassin:</strong> Can teleport onto any enemy pawn and capture it.</p>
                 </div>
                 <div class="flex items-start gap-4">
                     <img src="chess_white_tower.png" class="w-9 h-9 object-contain shrink-0" alt="Tower">
@@ -213,7 +207,7 @@
                 </div>
                 <div class="flex items-start gap-4">
                     <img src="chess_white_ninja.png" class="w-9 h-9 object-contain shrink-0" alt="Ninja">
-                    <p><strong class="text-white">Ninja (Evolved Bishop):</strong> If your original Queen is captured, the Ninja can sacrifice itself to instantly revive the Queen.</p>
+                    <p><strong class="text-white">Ninja (Evolved Bishop):</strong> If your original Queen/Monarch is captured, the Ninja can sacrifice itself to instantly revive the Queen/Monarch.</p>
                 </div>
                 <div class="flex items-start gap-4">
                     <img src="chess_white_dragon.png" class="w-9 h-9 object-contain shrink-0" alt="Dragon">
@@ -227,6 +221,59 @@
                     <img src="chess_white_tyran.png" class="w-9 h-9 object-contain shrink-0" alt="Tyran">
                     <p><strong class="text-white">Tyran (Evolved King):</strong> Can use its turn to instantly spawn a new Pawn on any empty square of its starting rank.</p>
                 </div>
+                <hr class="border-zinc-800 my-2">
+                <div>
+                    <h3 class="text-white font-bold mb-2 text-base">Point System</h3>
+                    <p class="mb-2 text-zinc-400">The score displayed during the game is purely to help you gauge the overall strength of each player's board. Pieces are valued as follows:</p>
+                    <ul class="list-disc pl-5 space-y-1 text-zinc-300">
+                        <li><strong>Pawn:</strong> 1 point</li>
+                        <li><strong>Knight & Bishop:</strong> 3 points</li>
+                        <li><strong>Rook:</strong> 5 points</li>
+                        <li><strong>Commander:</strong> 7 points</li>
+                        <li><strong>Queen:</strong> 9 points</li>
+                        <li><strong>Any Evolved Piece:</strong> 12 points</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tyran Action Modal -->
+    <div id="tyran-action-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-sm shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
+                <h2 class="text-lg font-black text-white tracking-tight">Tyran Action</h2>
+                <button id="close-tyran-action" class="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-full transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-5 flex flex-col gap-4">
+                <button id="btn-spawn-pawn" class="flex items-center gap-4 p-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-colors border border-zinc-700 text-left w-full btn-active">
+                    <img id="tyran-modal-pawn-img" src="" class="w-12 h-12 object-contain shrink-0" alt="Pawn">
+                    <div>
+                        <strong class="text-white block text-lg font-black">Spawn Pawn</strong>
+                        <span class="text-zinc-400 text-sm">Create a new pawn here</span>
+                    </div>
+                </button>
+                <button id="btn-move-tyran" class="flex items-center gap-4 p-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-colors border border-zinc-700 text-left w-full btn-active">
+                    <img id="tyran-modal-tyran-img" src="" class="w-12 h-12 object-contain shrink-0" alt="Tyran">
+                    <div>
+                        <strong class="text-white block text-lg font-black">Move Tyran</strong>
+                        <span class="text-zinc-400 text-sm">Move the Tyran to this square</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promotion Modal -->
+    <div id="promotion-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-sm shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
+                <h2 class="text-lg font-black text-white tracking-tight">Choose Promotion</h2>
+            </div>
+            <div class="p-5 grid grid-cols-2 gap-4" id="promotion-options">
+                <!-- Buttons injected dynamically -->
             </div>
         </div>
     </div>
@@ -242,6 +289,7 @@
                 k: 'chess_white_king.png',
                 c: 'chess_white_commander.png',
                 // Evolved pieces
+                assassin: 'chess_white_assassin.png',
                 ninja: 'chess_white_ninja.png',
                 tower: 'chess_white_tower.png',
                 dragon: 'chess_white_dragon.png',
@@ -257,6 +305,7 @@
                 k: 'chess_black_king.png',
                 c: 'chess_black_commander.png',
                 // Evolved pieces
+                assassin: 'chess_black_assassin.png',
                 ninja: 'chess_black_ninja.png',
                 tower: 'chess_black_tower.png',
                 dragon: 'chess_black_dragon.png',
@@ -287,6 +336,7 @@
         let whiteScore = 0;
         let blackScore = 0;
 
+        // Returns the numerical score value of a piece based on its type and evolution status
         function getPieceValue(type, isEvolved) {
             if (isEvolved) return 12;
             switch(type) {
@@ -300,6 +350,7 @@
             }
         }
 
+        // Recalculates and updates the current score for both White and Black players based on pieces on the board
         function calculateScores() {
             whiteScore = 0;
             blackScore = 0;
@@ -316,6 +367,7 @@
             }
         }
 
+        // Initializes a new game by resetting the board, pieces, turns, and all tracking variables
         function initGame() {
             board = [
                 ['br', 'bn', 'bb', 'bq', 'bk', 'bb', 'bn', 'br'],
@@ -332,9 +384,9 @@
             extBoard[7][3] = { originalQueen: true };
             extBoard[0][3] = { originalQueen: true };
             
-            const wCmd = Math.floor(Math.random() * 8), bCmd = Math.floor(Math.random() * 8);
-            board[6][wCmd] = 'wc'; extBoard[6][wCmd] = { isCommander: true };
-            board[1][bCmd] = 'bc'; extBoard[1][bCmd] = { isCommander: true };
+            const CmdFile = Math.floor(Math.random() * 8);
+            board[6][CmdFile] = 'wc'; extBoard[6][CmdFile] = { isCommander: true };
+            board[1][CmdFile] = 'bc'; extBoard[1][CmdFile] = { isCommander: true };
             
             turn = 'w';
             selectedSquare = null;
@@ -349,11 +401,13 @@
             whiteScore = 0;
             blackScore = 0;
             document.getElementById('move-count').innerText = "Moves: 0";
+            document.getElementById('game-result').classList.add('hidden');
             
             render();
             updateUI();
         }
 
+        // Updates the HTML DOM to visually display the current board state, pieces, and move highlights
         function render() {
             boardEl.innerHTML = '';
             for (let r = 0; r < 8; r++) {
@@ -380,16 +434,16 @@
                             else if (type === 'n') imageUrl = PIECES[color].dragon;
                             else if (type === 'q' && ext.originalQueen) imageUrl = PIECES[color].monarch;
                             else if (type === 'k') imageUrl = PIECES[color].tyran;
-                            else imageUrl = PIECES[color][type]; // Fallback for pawn->queen, commander
+                            else if (type === 'c') imageUrl = PIECES[color].assassin;
+                            else imageUrl = PIECES[color][type]; // Fallback for pawn->queen
                         } else {
                             imageUrl = PIECES[color][type];
                         }
                         img.src = imageUrl;
                         img.className = 'piece';
                         if (ext) {
+                            if (ext.fromPawn) img.classList.add('piece-pawn-evolved');
                             if (ext.invulnerable) img.classList.add('piece-invulnerable');
-                            else if (ext.isCommander && ext.promoted) img.classList.add('piece-evolved-commander');
-                            else if (ext.isCommander) img.classList.add('piece-commander');
                         }
                         square.appendChild(img);
                     }
@@ -407,12 +461,22 @@
             }
         }
 
+        // Processes click events on the board squares to select pieces or execute moves
         function handleSquareClick(r, c) {
             const piece = board[r][c];
-            const move = validMoves.find(m => m.r === r && m.c === c);
+            const matchingMoves = validMoves.filter(m => m.r === r && m.c === c);
             
-            if (move) {
-                makeMove(selectedSquare.r, selectedSquare.c, r, c, move);
+            if (matchingMoves.length > 0) {
+                // If a square has both a normal move and a spawn pawn move, show custom modal
+                if (matchingMoves.length > 1) {
+                    const spawnMove = matchingMoves.find(m => m.special === 'spawn_pawn');
+                    const normalMove = matchingMoves.find(m => !m.special);
+                    if (spawnMove && normalMove) {
+                        showTyranActionModal(spawnMove, normalMove, selectedSquare.r, selectedSquare.c, r, c);
+                        return;
+                    }
+                }
+                makeMove(selectedSquare.r, selectedSquare.c, r, c, matchingMoves[0]);
                 return;
             }
 
@@ -432,6 +496,77 @@
             }
         }
 
+        // Displays a custom modal to choose between moving the Tyran and spawning a pawn
+        function showTyranActionModal(spawnMove, normalMove, sr, sc, r, c) {
+            const modal = document.getElementById('tyran-action-modal');
+            const pawnImg = document.getElementById('tyran-modal-pawn-img');
+            const tyranImg = document.getElementById('tyran-modal-tyran-img');
+            
+            pawnImg.src = PIECES[turn].p;
+            tyranImg.src = PIECES[turn].tyran;
+            
+            modal.style.display = 'flex';
+            
+            const cleanup = () => { modal.style.display = 'none'; };
+            
+            document.getElementById('close-tyran-action').onclick = cleanup;
+            
+            document.getElementById('btn-spawn-pawn').onclick = () => {
+                cleanup();
+                makeMove(sr, sc, r, c, spawnMove);
+            };
+            
+            document.getElementById('btn-move-tyran').onclick = () => {
+                cleanup();
+                makeMove(sr, sc, r, c, normalMove);
+            };
+        }
+
+        // Displays a modal to choose the piece to promote to
+        function showPromotionModal(r, c, type, color, callback) {
+            const modal = document.getElementById('promotion-modal');
+            const optionsContainer = document.getElementById('promotion-options');
+            optionsContainer.innerHTML = '';
+            
+            let options = [];
+            if (type === 'p') {
+                options = [
+                    { id: 'q', name: 'Queen', img: PIECES[color].q, evolved: false },
+                    { id: 'r', name: 'Rook', img: PIECES[color].r, evolved: false },
+                    { id: 'b', name: 'Bishop', img: PIECES[color].b, evolved: false },
+                    { id: 'n', name: 'Knight', img: PIECES[color].n, evolved: false }
+                ];
+            } else if (type === 'c') {
+                options = [
+                    { id: 'c', name: 'Assassin', img: PIECES[color].assassin, evolved: true },
+                    { id: 'b', name: 'Ninja', img: PIECES[color].ninja, evolved: true },
+                    { id: 'r', name: 'Tower', img: PIECES[color].tower, evolved: true },
+                    { id: 'n', name: 'Dragon', img: PIECES[color].dragon, evolved: true },
+                    { id: 'q', name: 'Monarch', img: PIECES[color].monarch, evolved: true }
+                ];
+            }
+
+            options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800 hover:bg-zinc-700 rounded-2xl transition-colors border border-zinc-700 btn-active';
+                if (options.length === 5 && idx === 4) btn.classList.add('col-span-2');
+                
+                const img = document.createElement('img');
+                img.src = opt.img;
+                img.className = 'w-12 h-12 object-contain shrink-0';
+                
+                btn.innerHTML = `<span class="text-white font-bold text-xs text-center leading-tight">${opt.name}</span>`;
+                btn.prepend(img);
+                
+                btn.onclick = () => { modal.style.display = 'none'; callback(opt.id, opt.evolved, opt.name); };
+                
+                optionsContainer.appendChild(btn);
+            });
+            
+            modal.style.display = 'flex';
+        }
+
+        // Generates all physically possible moves for a piece, ignoring rules like being in check
         function getPseudoMoves(r, c, currentBoard, currentEP, currentExt) {
             const piece = currentBoard[r][c];
             const ext = currentExt[r][c] || {};
@@ -469,7 +604,7 @@
                         blocked1 = true;
                     }
                     
-                    if (r === (color === 'w' ? 6 : 1) && !blocked1 && !currentBoard[r+2*d][c]) {
+                    if (r === (color === 'w' ? 6 : 1) && !blocked1 && !currentBoard[r+2*d][c] && !ext.hasMoved) {
                         moves.push({ r: r+2*d, c: c });
                     }
                 }
@@ -528,7 +663,7 @@
                         for (let [dr, dc] of dirs['k']) {
                             let nr = kR+dr, nc = kC+dc;
                             if (nr>=0 && nr<8 && nc>=0 && nc<8 && (nr!==r || nc!==c)) {
-                                if (!currentBoard[nr][nc] || (currentBoard[nr][nc][0] !== color && !currentExt[nr][nc]?.invulnerable)) moves.push({ r: nr, c: nc, special: 'queen_teleport' });
+                                if (!currentBoard[nr][nc]) moves.push({ r: nr, c: nc, special: 'queen_teleport' });
                             }
                         }
                     }
@@ -548,6 +683,7 @@
             return moves;
         }
 
+        // Filters possible moves to return only strictly legal moves (prevents moving into check) and includes castling
         function getLegalMoves(r, c, currentBoard, color, rights, ep, currentExt) {
             return getPseudoMoves(r, c, currentBoard, ep, currentExt).filter(m => {
                 const temp = currentBoard.map(row => [...row]);
@@ -570,6 +706,7 @@
             }).concat(typeOfCastle(r, c, currentBoard, color, rights, currentExt));
         }
 
+        // Determines if kingside or queenside castling is legally allowed for the given king
         function typeOfCastle(r, c, currentBoard, color, rights, currentExt) {
             if (currentBoard[r][c][1] !== 'k' || isCheck(color, currentBoard)) return [];
             const l = [], rank = color === 'w' ? 7 : 0, rts = rights[color];
@@ -578,18 +715,21 @@
             return l;
         }
 
+        // Checks if the king of the specified color is currently being attacked (in check)
         function isCheck(color, b = board, ext = extBoard) {
             let k = null;
             for (let r=0; r<8; r++) for (let c=0; c<8; c++) if (b[r][c] === color+'k') k = {r,c};
             return k ? isSquareAttacked(k.r, k.c, color, b, ext) : false;
         }
 
+        // Evaluates whether a specific square is under attack by any pieces of the opposing color
         function isSquareAttacked(r, c, defColor, b, ext) {
             const opp = defColor === 'w' ? 'b' : 'w';
             for (let row=0; row<8; row++) for (let col=0; col<8; col++) if (b[row][col] && b[row][col][0] === opp && getPseudoMoves(row, col, b, null, ext).some(m => m.r === r && m.c === c)) return true;
             return false;
         }
 
+        // Executes a valid move on the board, handling captures, special abilities, history tracking, and turn switching
         function makeMove(fr, fc, tr, tc, move) {
             stateHistory.push({
                 board: board.map(row => [...row]),
@@ -617,15 +757,44 @@
                 extBoard[epR][tc] = null;
             }
 
+            const finalizeMove = (promotedMsg = null) => {
+                moveHistory.push({ from: {r:fr, c:fc}, to: {r:tr, c:tc}, piece });
+                if (promotedMsg) {
+                    addHistoryLog(`${String.fromCharCode(97+fc)}${8-fr} ➔ ${String.fromCharCode(97+tc)}${8-tr} (${promotedMsg})`);
+                } else if (!move.special) {
+                    addHistoryLog(`${String.fromCharCode(97+fc)}${8-fr} ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
+                }
+                lastMove = { from: {r:fr, c:fc}, to: {r:tr, c:tc} };
+                
+                if (piece === 'wk') castlingRights.w = { k: false, q: false };
+                if (piece === 'bk') castlingRights.b = { k: false, q: false };
+                if (fr === 7 && fc === 0) castlingRights.w.q = false;
+                if (fr === 7 && fc === 7) castlingRights.w.k = false;
+                if (fr === 0 && fc === 0) castlingRights.b.q = false;
+                if (fr === 0 && fc === 7) castlingRights.b.k = false;
+                
+                enPassantTarget = (piece[1] === 'p' && Math.abs(tr - fr) === 2) ? { r: (fr + tr) / 2, c: fc } : null;
+                turn = turn === 'w' ? 'b' : 'w';
+                
+                selectedSquare = null;
+                validMoves = [];
+
+                checkGameStatus();
+                render();
+                updateUI();
+            };
+
             if (move.special) {
                 if (move.special === 'toggle_invulnerable') {
                     extBoard[fr][fc].invulnerable = !extBoard[fr][fc].invulnerable;
                     addHistoryLog(`Rook Shield ${extBoard[fr][fc].invulnerable ? 'On' : 'Off'}`);
                 } else if (move.special === 'revive_queen') {
                     board[fr][fc] = turn + 'q';
-                    extBoard[fr][fc] = { originalQueen: true, promoted: false };
+                    const opponentBackline = turn === 'w' ? 0 : 7;
+                    const spawnMonarch = deadOriginalQueens[turn] === 'monarch' || fr === opponentBackline;
+                    extBoard[fr][fc] = { originalQueen: true, promoted: spawnMonarch };
                     deadOriginalQueens[turn] = false;
-                    addHistoryLog(`Bishop sacrifices to Revive Queen!`);
+                    addHistoryLog(`Ninja sacrifices to Revive ${spawnMonarch ? 'Monarch' : 'Queen'}!`);
                 } else if (move.special === 'spawn_pawn') {
                     board[tr][tc] = turn + 'p';
                     extBoard[tr][tc] = null;
@@ -634,21 +803,26 @@
                     if (capturedPiece) {
                         pts = getPieceValue(capturedPiece[1], capturedExtObj?.promoted);
                         if (turn === 'w') whiteScore += pts; else blackScore += pts;
-                        if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = true;
+                        if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = capturedExtObj.promoted ? 'monarch' : 'queen';
                     }
                     board[tr][tc] = piece; board[fr][fc] = null;
                     extBoard[tr][tc] = extBoard[fr][fc]; extBoard[fr][fc] = null;
-                    addHistoryLog(`Special Teleport ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
+                    if (!extBoard[tr][tc]) extBoard[tr][tc] = {};
+                    extBoard[tr][tc].hasMoved = true;
+                    addHistoryLog(`Assassin Teleport ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
                 }
+                finalizeMove();
             } else {
                 if (capturedPiece) {
                     pts = getPieceValue(capturedPiece[1], capturedExtObj?.promoted);
                     if (turn === 'w') whiteScore += pts; else blackScore += pts;
-                    if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = true;
+                    if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = capturedExtObj.promoted ? 'monarch' : 'queen';
                 }
                 
                 board[tr][tc] = piece; board[fr][fc] = null;
                 extBoard[tr][tc] = extBoard[fr][fc]; extBoard[fr][fc] = null;
+                if (!extBoard[tr][tc]) extBoard[tr][tc] = {};
+                extBoard[tr][tc].hasMoved = true;
                 
                 if (move.castle === 'k') { board[tr][5] = turn+'r'; board[tr][7] = null; extBoard[tr][5] = extBoard[tr][7]; extBoard[tr][7] = null; }
                 if (move.castle === 'q') { board[tr][3] = turn+'r'; board[tr][0] = null; extBoard[tr][3] = extBoard[tr][0]; extBoard[tr][0] = null; }
@@ -656,42 +830,47 @@
                 let newPiece = board[tr][tc];
                 if (newPiece && !extBoard[tr][tc]?.promoted) {
                     if ((turn === 'w' && tr === 0) || (turn === 'b' && tr === 7)) {
-                        if (!extBoard[tr][tc]) extBoard[tr][tc] = {};
-                        extBoard[tr][tc].promoted = true;
-                        if (newPiece[1] === 'p') board[tr][tc] = turn + 'q';
-                        addHistoryLog(`${newPiece[1] === 'c' ? 'Commander' : 'Piece'} Promoted!`);
+                        if (newPiece[1] === 'p' || newPiece[1] === 'c') {
+                            showPromotionModal(tr, tc, newPiece[1], turn, (chosenType, isEvolved, logName) => {
+                                board[tr][tc] = turn + chosenType;
+                                extBoard[tr][tc].promoted = isEvolved;
+                                if (!isEvolved) extBoard[tr][tc].cannotEvolve = true; // Prevents pieces like pawn-promoted Queens from evolving again
+                                if (newPiece[1] === 'p') extBoard[tr][tc].fromPawn = true; // Tags piece to give it the purple glow
+                                if (chosenType === 'c') extBoard[tr][tc].isCommander = true;
+                                else extBoard[tr][tc].isCommander = false;
+                                
+                                if (chosenType === 'q' && isEvolved) extBoard[tr][tc].originalQueen = true;
+                                
+                                finalizeMove(`Promoted to ${logName}`);
+                            });
+                            return; // Halt execution until modal callback finishes
+                        } else if (!extBoard[tr][tc].cannotEvolve && (newPiece[1] !== 'q' || extBoard[tr][tc].originalQueen)) {
+                            extBoard[tr][tc].promoted = true;
+                            
+                            let evolvedName = 'Piece';
+                            if (newPiece[1] === 'r') evolvedName = 'Tower';
+                            if (newPiece[1] === 'b') evolvedName = 'Ninja';
+                            if (newPiece[1] === 'n') evolvedName = 'Dragon';
+                            if (newPiece[1] === 'k') evolvedName = 'Tyran';
+                            if (newPiece[1] === 'q') evolvedName = 'Monarch';
+                            
+                            finalizeMove(`Evolved to ${evolvedName}`);
+                            return;
+                        }
                     }
                 }
+                finalizeMove();
             }
-
-            moveHistory.push({ from: {r:fr, c:fc}, to: {r:tr, c:tc}, piece });
-            if (!move.special) addHistoryLog(`${String.fromCharCode(97+fc)}${8-fr} ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
-            lastMove = { from: {r:fr, c:fc}, to: {r:tr, c:tc} };
-            
-            if (piece === 'wk') castlingRights.w = { k: false, q: false };
-            if (piece === 'bk') castlingRights.b = { k: false, q: false };
-            if (fr === 7 && fc === 0) castlingRights.w.q = false;
-            if (fr === 7 && fc === 7) castlingRights.w.k = false;
-            if (fr === 0 && fc === 0) castlingRights.b.q = false;
-            if (fr === 0 && fc === 7) castlingRights.b.k = false;
-            
-            enPassantTarget = (piece[1] === 'p' && Math.abs(tr - fr) === 2) ? { r: (fr + tr) / 2, c: fc } : null;
-            turn = turn === 'w' ? 'b' : 'w';
-            
-            selectedSquare = null;
-            validMoves = [];
-
-            checkGameStatus();
-            render();
-            updateUI();
         }
 
+        // Checks if the current player has any legal moves left to determine Checkmate or Stalemate
         function checkGameStatus() {
             let hasMoves = false;
             for (let r=0; r<8; r++) for (let c=0; c<8; c++) if (board[r][c] && board[r][c][0] === turn && getLegalMoves(r, c, board, turn, castlingRights, enPassantTarget, extBoard).length > 0) hasMoves = true;
             if (!hasMoves) showGameOver(isCheck(turn) ? 'Checkmate!' : 'Stalemate!', isCheck(turn) ? `${turn === 'w' ? 'Black' : 'White'} Wins` : 'Draw');
         }
 
+        // Refreshes non-board UI elements like turn indicators, check warnings, and player scores
         function updateUI() {
             statusEl.innerText = `${turn === 'w' ? "White" : "Black"}'s Turn`;
             if (isCheck(turn)) checkWarn.classList.remove('hidden'); else checkWarn.classList.add('hidden');
@@ -701,6 +880,7 @@
             scoreBlackEl.innerText = `Score: ${blackScore}`;
         }
 
+        // Appends a text description of a performed move or action to the history panel
         function addHistoryLog(s) {
             const d = document.createElement('div');
             d.className = 'p-1.5 bg-zinc-800/50 rounded border border-zinc-800/80 flex items-center justify-between';
@@ -709,10 +889,11 @@
             historyEl.scrollTop = historyEl.scrollHeight;
         }
 
+        // Displays the game over status text below the move count
         function showGameOver(t, d) {
-            document.getElementById('modal-title').innerText = t;
-            document.getElementById('modal-desc').innerText = d;
-            document.getElementById('game-over-modal').style.display = 'flex';
+            const gameResultEl = document.getElementById('game-result');
+            gameResultEl.innerText = `${t} - ${d}`;
+            gameResultEl.classList.remove('hidden');
         }
 
     const historyModal = document.getElementById('history-modal');
@@ -725,7 +906,6 @@
     document.getElementById('close-rules').onclick = () => rulesModal.style.display = 'none';
 
         document.getElementById('reset-btn').onclick = initGame;
-        document.getElementById('modal-reset').onclick = () => { document.getElementById('game-over-modal').style.display = 'none'; initGame(); };
         document.getElementById('undo-btn').onclick = () => {
             if (stateHistory.length === 0) return;
             const prevState = stateHistory.pop();
@@ -742,6 +922,7 @@
             
             selectedSquare = null;
             validMoves = [];
+            document.getElementById('game-result').classList.add('hidden');
             
             render();
             updateUI();
