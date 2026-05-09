@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chess Pro Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #09090b; 
+            color: #fafafa; 
+            overflow: hidden; /* Prevent body scroll, use internal scrolls */
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Board scaling */
+        .chess-board { 
+            display: grid; 
+            grid-template-columns: repeat(8, 1fr); 
+            grid-template-rows: repeat(8, 1fr); 
+            aspect-ratio: 1/1; 
+            width: 100%; 
+            max-width: 900px; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            touch-action: manipulation;
+        }
+
+        .square { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            position: relative; 
+            cursor: pointer; 
+            -webkit-tap-highlight-color: transparent;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .square.light { background-color: #eeeed2; }
+        .square.dark { background-color: #769656; }
+        .square.selected { background-color: #f6f669 !important; }
+        .square.last-move { background-color: rgba(246, 246, 105, 0.4); }
+        
+        .square.valid-move::after { 
+            content: ""; 
+            width: 25%; 
+            height: 25%; 
+            background: rgba(0, 0, 0, 0.15); 
+            border-radius: 50%; 
+        }
+        
+        .square.valid-capture::after { 
+            content: ""; 
+            width: 85%; 
+            height: 85%; 
+            border: 4px solid rgba(0, 0, 0, 0.1); 
+            border-radius: 50%; 
+            position: absolute; 
+        }
+        
+        .square.check { background-color: #ef4444 !important; }
+        
+        .piece { 
+            width: 92%; 
+            height: 92%; 
+            object-fit: contain;
+            z-index: 10;
+            pointer-events: none;
+        }
+        
+        .coord { 
+            position: absolute; 
+            font-size: 8px; 
+            font-weight: 800; 
+            pointer-events: none; 
+            opacity: 0.6;
+        }
+        .coord-rank { left: 2px; top: 2px; }
+        .coord-file { right: 2px; bottom: 2px; }
+        .light .coord { color: #769656; }
+        .dark .coord { color: #eeeed2; }
+        
+        .piece-commander { filter: drop-shadow(0 0 8px #fbbf24); }
+        .piece-evolved-commander { filter: drop-shadow(0 0 16px #ef4444); }
+        .piece-invulnerable { filter: drop-shadow(0 0 12px #22d3ee); background: rgba(34, 211, 238, 0.3); border-radius: 50%; }
+
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
+        
+        /* Mobile Active State */
+        .btn-active:active { transform: scale(0.96); }
+    </style>
+</head>
+<body class="safe-area-inset">
+
+    <!-- Main Game Area -->
+    <main class="flex-grow flex flex-col items-center justify-center p-1 sm:p-2 overflow-hidden bg-zinc-950">
+        
+        <!-- Game Status HUD -->
+        <div class="w-full max-w-[600px] flex items-center justify-between mb-2 px-1">
+            <div class="flex items-center gap-3">
+                <span id="game-status" class="text-sm font-bold text-white">White's Turn</span>
+                <span id="check-warning" class="hidden px-2 py-0.5 bg-red-500 text-white text-[10px] font-black rounded-full animate-pulse">CHECK</span>
+            </div>
+            <span id="move-count" class="text-xs text-zinc-500 font-mono">Moves: 0</span>
+        </div>
+
+        <!-- Opponent Info -->
+        <div class="w-full max-w-[600px] flex items-center justify-between mb-3 px-1">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center text-zinc-500">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"></path></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-zinc-400">Black <span id="score-black" class="text-[10px] ml-1 bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300 font-mono">Score: 0</span></p>
+                    <div id="captured-white" class="flex gap-0.5 h-4"></div>
+                </div>
+            </div>
+            <!--<div id="black-timer" class="text-lg font-mono font-bold text-zinc-600">--:--</div>-->
+        </div>
+
+        <!-- The Board -->
+        <div id="board" class="chess-board rounded-sm overflow-hidden touch-none"></div>
+
+        <!-- Player Info -->
+        <div class="w-full max-w-[600px] flex items-center justify-between mt-3 px-1">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded bg-white flex items-center justify-center text-black">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"></path></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-bold text-white">White <span id="score-white" class="text-[10px] ml-1 bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300 font-mono">Score: 0</span></p>
+                    <div id="captured-black" class="flex gap-0.5 h-4"></div>
+                </div>
+            </div>
+            <!--<div id="white-timer" class="text-lg font-mono font-bold text-white">--:--</div>-->
+        </div>
+    </main>
+
+    <!-- Bottom Action Bar -->
+    <footer class="p-3 pb-6 bg-zinc-900/80 border-t border-zinc-900 grid grid-cols-2 gap-3 shrink-0 backdrop-blur-md">
+        <button id="history-btn" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl flex items-center justify-center gap-2 transition-all btn-active text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            History
+        </button>
+        <button id="rules-btn" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl flex items-center justify-center gap-2 transition-all btn-active text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Rules
+        </button>
+        <button id="undo-btn" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl flex items-center justify-center gap-2 transition-all btn-active text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+            Undo
+        </button>
+        <button id="reset-btn" class="w-full py-3 bg-white hover:bg-zinc-200 text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-all btn-active shadow-xl shadow-white/10 text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Reset
+        </button>
+    </footer>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-6 backdrop-blur-sm">
+        <div class="bg-zinc-900 p-8 rounded-3xl border border-zinc-800 max-w-sm w-full text-center shadow-2xl">
+            <div class="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z"></path></svg>
+            </div>
+            <h2 id="modal-title" class="text-3xl font-black text-white mb-2 tracking-tight">Checkmate!</h2>
+            <p id="modal-desc" class="text-zinc-400 mb-8 font-medium">White has won the match.</p>
+            <button id="modal-reset" class="w-full py-5 bg-white text-black font-black rounded-2xl hover:bg-zinc-200 transition-all btn-active text-lg shadow-xl shadow-white/5">New Match</button>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-md h-[70vh] shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
+                <h2 class="text-lg font-black text-white tracking-tight">Move History</h2>
+                <button id="close-history" class="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-full transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="move-history" class="flex-grow overflow-y-auto custom-scroll p-4 text-xs font-mono flex flex-col gap-2 content-start">
+                <!-- Moves here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-md max-h-[80vh] shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 shrink-0">
+                <h2 class="text-lg font-black text-white tracking-tight">Piece Abilities</h2>
+                <button id="close-rules" class="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-full transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-grow overflow-y-auto custom-scroll p-5 text-sm text-zinc-300 space-y-5">
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_queen.png" class="w-9 h-9 object-contain shrink-0" alt="Queen">
+                    <p><strong class="text-white">Promotion:</strong> Reach the opposite end of the board to promote pieces and gain special abilities! Normal pawns promote to standard Queens.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_commander.png" class="w-9 h-9 object-contain shrink-0 piece-commander" alt="Commander">
+                    <p><strong class="text-yellow-400">Commander:</strong> Starts on a random back-rank file. Moves like a King + Pawn. Promotes to <strong class="text-red-400 drop-shadow-[0_0_8px_#ef4444]">Promoted Commander</strong>: Can teleport onto any enemy pawn and capture it.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_tower.png" class="w-9 h-9 object-contain shrink-0" alt="Tower">
+                    <p><strong class="text-white">Tower (Evolved Rook):</strong> Can use its turn to toggle an invulnerability shield on/off. When shielded, it cannot move or be captured, and ally pieces can move and attack through it!</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_ninja.png" class="w-9 h-9 object-contain shrink-0" alt="Ninja">
+                    <p><strong class="text-white">Ninja (Evolved Bishop):</strong> If your original Queen is captured, the Ninja can sacrifice itself to instantly revive the Queen.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_dragon.png" class="w-9 h-9 object-contain shrink-0" alt="Dragon">
+                    <p><strong class="text-white">Dragon (Evolved Knight):</strong> Can jump/teleport to any empty square on the opponent's half of the board.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_monarch.png" class="w-9 h-9 object-contain shrink-0" alt="Monarch">
+                    <p><strong class="text-white">Monarch (Evolved Original Queen):</strong> Can teleport to any empty square directly adjacent to your King.</p>
+                </div>
+                <div class="flex items-start gap-4">
+                    <img src="chess_white_tyran.png" class="w-9 h-9 object-contain shrink-0" alt="Tyran">
+                    <p><strong class="text-white">Tyran (Evolved King):</strong> Can use its turn to instantly spawn a new Pawn on any empty square of its starting rank.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PIECES = {
+            w: {
+                p: 'chess_white_pawn.png',
+                r: 'chess_white_rook.png',
+                n: 'chess_white_knight.png',
+                b: 'chess_white_bishop.png',
+                q: 'chess_white_queen.png',
+                k: 'chess_white_king.png',
+                c: 'chess_white_commander.png',
+                // Evolved pieces
+                ninja: 'chess_white_ninja.png',
+                tower: 'chess_white_tower.png',
+                dragon: 'chess_white_dragon.png',
+                monarch: 'chess_white_monarch.png',
+                tyran: 'chess_white_tyran.png'
+            },
+            b: {
+                p: 'chess_black_pawn.png',
+                r: 'chess_black_rook.png',
+                n: 'chess_black_knight.png',
+                b: 'chess_black_bishop.png',
+                q: 'chess_black_queen.png',
+                k: 'chess_black_king.png',
+                c: 'chess_black_commander.png',
+                // Evolved pieces
+                ninja: 'chess_black_ninja.png',
+                tower: 'chess_black_tower.png',
+                dragon: 'chess_black_dragon.png',
+                monarch: 'chess_black_monarch.png',
+                tyran: 'chess_black_tyran.png'
+            }
+        };
+
+        let board = [];
+        let extBoard = [];
+        let deadOriginalQueens = { w: false, b: false };
+        let turn = 'w';
+        let selectedSquare = null;
+        let validMoves = [];
+        let moveHistory = [];
+        let stateHistory = [];
+        let castlingRights = { w: { k: true, q: true }, b: { k: true, q: true } };
+        let enPassantTarget = null;
+        let lastMove = null;
+
+        const boardEl = document.getElementById('board');
+        const statusEl = document.getElementById('game-status');
+        const historyEl = document.getElementById('move-history');
+        const checkWarn = document.getElementById('check-warning');
+        const scoreWhiteEl = document.getElementById('score-white');
+        const scoreBlackEl = document.getElementById('score-black');
+
+        let whiteScore = 0;
+        let blackScore = 0;
+
+        function getPieceValue(type, isEvolved) {
+            if (isEvolved) return 12;
+            switch(type) {
+                case 'p': return 1;
+                case 'n': return 3;
+                case 'b': return 3;
+                case 'r': return 5;
+                case 'c': return 7;
+                case 'q': return 9;
+                default: return 0;
+            }
+        }
+
+        function calculateScores() {
+            whiteScore = 0;
+            blackScore = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    if (piece) {
+                        const isEvolved = extBoard[r][c] && extBoard[r][c].promoted;
+                        const value = getPieceValue(piece[1], isEvolved);
+                        if (piece[0] === 'w') whiteScore += value;
+                        else blackScore += value;
+                    }
+                }
+            }
+        }
+
+        function initGame() {
+            board = [
+                ['br', 'bn', 'bb', 'bq', 'bk', 'bb', 'bn', 'br'],
+                ['bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp'],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                [null, null, null, null, null, null, null, null],
+                ['wp', 'wp', 'wp', 'wp', 'wp', 'wp', 'wp', 'wp'],
+                ['wr', 'wn', 'wb', 'wq', 'wk', 'wb', 'wn', 'wr']
+            ];
+            extBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+            deadOriginalQueens = { w: false, b: false };
+            extBoard[7][3] = { originalQueen: true };
+            extBoard[0][3] = { originalQueen: true };
+            
+            const wCmd = Math.floor(Math.random() * 8), bCmd = Math.floor(Math.random() * 8);
+            board[6][wCmd] = 'wc'; extBoard[6][wCmd] = { isCommander: true };
+            board[1][bCmd] = 'bc'; extBoard[1][bCmd] = { isCommander: true };
+            
+            turn = 'w';
+            selectedSquare = null;
+            validMoves = [];
+            moveHistory = [];
+            stateHistory = [];
+            castlingRights = { w: { k: true, q: true }, b: { k: true, q: true } };
+            enPassantTarget = null;
+            lastMove = null;
+            
+            historyEl.innerHTML = '';
+            whiteScore = 0;
+            blackScore = 0;
+            document.getElementById('move-count').innerText = "Moves: 0";
+            
+            render();
+            updateUI();
+        }
+
+        function render() {
+            boardEl.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.r = r;
+                    square.dataset.c = c;
+                    
+                    if (c === 0) square.innerHTML += `<span class="coord coord-rank">${8-r}</span>`;
+                    if (r === 7) square.innerHTML += `<span class="coord coord-file">${String.fromCharCode(97+c)}</span>`;
+
+                    const piece = board[r][c];
+                    if (piece) {
+                        const img = document.createElement('img');
+                        const ext = extBoard[r][c];
+                        let imageUrl;
+                        const color = piece[0];
+                        const type = piece[1];
+
+                        if (ext && ext.promoted) {
+                            if (type === 'b') imageUrl = PIECES[color].ninja;
+                            else if (type === 'r') imageUrl = PIECES[color].tower;
+                            else if (type === 'n') imageUrl = PIECES[color].dragon;
+                            else if (type === 'q' && ext.originalQueen) imageUrl = PIECES[color].monarch;
+                            else if (type === 'k') imageUrl = PIECES[color].tyran;
+                            else imageUrl = PIECES[color][type]; // Fallback for pawn->queen, commander
+                        } else {
+                            imageUrl = PIECES[color][type];
+                        }
+                        img.src = imageUrl;
+                        img.className = 'piece';
+                        if (ext) {
+                            if (ext.invulnerable) img.classList.add('piece-invulnerable');
+                            else if (ext.isCommander && ext.promoted) img.classList.add('piece-evolved-commander');
+                            else if (ext.isCommander) img.classList.add('piece-commander');
+                        }
+                        square.appendChild(img);
+                    }
+
+                    if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) square.classList.add('selected');
+                    if (lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c))) square.classList.add('last-move');
+                    
+                    const move = validMoves.find(m => m.r === r && m.c === c);
+                    if (move) square.classList.add(board[r][c] || move.enPassant ? 'valid-capture' : 'valid-move');
+                    if (piece && piece[1] === 'k' && isCheck(piece[0])) square.classList.add('check');
+
+                    square.onclick = () => handleSquareClick(r, c);
+                    boardEl.appendChild(square);
+                }
+            }
+        }
+
+        function handleSquareClick(r, c) {
+            const piece = board[r][c];
+            const move = validMoves.find(m => m.r === r && m.c === c);
+            
+            if (move) {
+                makeMove(selectedSquare.r, selectedSquare.c, r, c, move);
+                return;
+            }
+
+            if (piece && piece[0] === turn) {
+                if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
+                    selectedSquare = null;
+                    validMoves = [];
+                } else {
+                    selectedSquare = { r, c };
+                    validMoves = getLegalMoves(r, c, board, turn, castlingRights, enPassantTarget, extBoard);
+                }
+                render();
+            } else {
+                selectedSquare = null;
+                validMoves = [];
+                render();
+            }
+        }
+
+        function getPseudoMoves(r, c, currentBoard, currentEP, currentExt) {
+            const piece = currentBoard[r][c];
+            const ext = currentExt[r][c] || {};
+            if (!piece) return [];
+            
+            const color = piece[0], type = piece[1], moves = [];
+
+            if (ext.invulnerable) {
+                if (ext.promoted && type === 'r') {
+                    moves.push({ r, c, special: 'toggle_invulnerable' });
+                }
+                return moves;
+            }
+
+            const dirs = {
+                'r': [[0,1], [0,-1], [1,0], [-1,0]],
+                'b': [[1,1], [1,-1], [-1,1], [-1,-1]],
+                'q': [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]],
+                'n': [[2,1], [2,-1], [-2,1], [-2,-1], [1,2], [1,-2], [-1,2], [-1,-2]],
+                'k': [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]]
+            };
+
+            if (type === 'p' || type === 'c') {
+                const d = color === 'w' ? -1 : 1;
+                let blocked1 = false;
+                
+                if (r+d >= 0 && r+d < 8) {
+                    const t1 = currentBoard[r+d][c];
+                    const e1 = currentExt[r+d][c];
+                    if (!t1) {
+                        moves.push({ r: r+d, c: c });
+                    } else if (t1[0] === color && e1?.invulnerable && t1[1] === 'r' && e1?.promoted) {
+                        // Allied tower, shoot through
+                    } else {
+                        blocked1 = true;
+                    }
+                    
+                    if (r === (color === 'w' ? 6 : 1) && !blocked1 && !currentBoard[r+2*d][c]) {
+                        moves.push({ r: r+2*d, c: c });
+                    }
+                }
+                for (let dc of [-1, 1]) {
+                    const nr = r+d, nc = c+dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        if (currentBoard[nr][nc] && currentBoard[nr][nc][0] !== color && !currentExt[nr][nc]?.invulnerable) moves.push({ r: nr, c: nc });
+                        if (currentEP && currentEP.r === nr && currentEP.c === nc) moves.push({ r: nr, c: nc, enPassant: true });
+                    }
+                }
+                if (type === 'c') {
+                    for (let [dr, dc] of dirs['k']) {
+                        const nr = r+dr, nc = c+dc;
+                        if (nr>=0 && nr<8 && nc>=0 && nc<8 && (!currentBoard[nr][nc] || (currentBoard[nr][nc][0] !== color && !currentExt[nr][nc]?.invulnerable))) {
+                            if (!moves.some(m => m.r === nr && m.c === nc)) moves.push({ r: nr, c: nc });
+                        }
+                    }
+                }
+            } else if (['r', 'b', 'q'].includes(type)) {
+                for (let [dr, dc] of dirs[type]) {
+                    let nr = r+dr, nc = c+dc;
+                    while (nr>=0 && nr<8 && nc>=0 && nc<8) {
+                        const tgt = currentBoard[nr][nc];
+                        const tgtExt = currentExt[nr][nc];
+                        if (!tgt) {
+                            moves.push({ r: nr, c: nc });
+                        } else {
+                            if (tgt[0] !== color && !tgtExt?.invulnerable) {
+                                moves.push({ r: nr, c: nc });
+                                break; 
+                            } else if (tgt[0] === color && tgtExt?.invulnerable && tgt[1] === 'r' && tgtExt?.promoted) {
+                                // Allied tower, shoot through
+                            } else { break; }
+                        }
+                        nr += dr; nc += dc;
+                    }
+                }
+            } else {
+                for (let [dr, dc] of dirs[type]) {
+                    const nr = r+dr, nc = c+dc;
+                    if (nr>=0 && nr<8 && nc>=0 && nc<8 && (!currentBoard[nr][nc] || (currentBoard[nr][nc][0] !== color && !currentExt[nr][nc]?.invulnerable))) moves.push({ r: nr, c: nc });
+                }
+            }
+            
+            if (ext.promoted) {
+                if (type === 'r') moves.push({ r, c, special: 'toggle_invulnerable' });
+                if (type === 'b' && deadOriginalQueens[color]) moves.push({ r, c, special: 'revive_queen' });
+                if (type === 'n') {
+                    let minR = color === 'w' ? 0 : 4, maxR = color === 'w' ? 3 : 7;
+                    for (let rr=minR; rr<=maxR; rr++) for (let cc=0; cc<8; cc++) if (!currentBoard[rr][cc]) moves.push({ r: rr, c: cc, special: 'knight_teleport' });
+                }
+                if (type === 'q' && ext.originalQueen) {
+                    let kR, kC;
+                    for(let rr=0;rr<8;rr++) for(let cc=0;cc<8;cc++) if (currentBoard[rr][cc] === color+'k') { kR=rr; kC=cc; }
+                    if (kR!==undefined) {
+                        for (let [dr, dc] of dirs['k']) {
+                            let nr = kR+dr, nc = kC+dc;
+                            if (nr>=0 && nr<8 && nc>=0 && nc<8 && (nr!==r || nc!==c)) {
+                                if (!currentBoard[nr][nc] || (currentBoard[nr][nc][0] !== color && !currentExt[nr][nc]?.invulnerable)) moves.push({ r: nr, c: nc, special: 'queen_teleport' });
+                            }
+                        }
+                    }
+                }
+                if (type === 'k') {
+                    let spawnR = color === 'w' ? 7 : 0;
+                    for (let cc=0; cc<8; cc++) if (!currentBoard[spawnR][cc]) moves.push({ r: spawnR, c: cc, special: 'spawn_pawn' });
+                }
+                if (type === 'c') {
+                    for(let rr=0;rr<8;rr++) for(let cc=0;cc<8;cc++) {
+                        let tgt = currentBoard[rr][cc];
+                        if (tgt && tgt[0] !== color && tgt[1] === 'p' && !currentExt[rr][cc]?.isCommander && !currentExt[rr][cc]?.invulnerable) moves.push({ r: rr, c: cc, special: 'cmdr_kill' });
+                    }
+                }
+            }
+            
+            return moves;
+        }
+
+        function getLegalMoves(r, c, currentBoard, color, rights, ep, currentExt) {
+            return getPseudoMoves(r, c, currentBoard, ep, currentExt).filter(m => {
+                const temp = currentBoard.map(row => [...row]);
+                const tempExt = currentExt.map(row => [...row].map(o => o ? {...o} : null));
+                
+                if (m.special) {
+                    if (m.special === 'toggle_invulnerable') { tempExt[r][c].invulnerable = !tempExt[r][c].invulnerable; }
+                    else if (m.special === 'revive_queen') { temp[r][c] = color+'q'; }
+                    else if (m.special === 'spawn_pawn') { temp[m.r][m.c] = color+'p'; }
+                    else {
+                        temp[m.r][m.c] = temp[r][c]; temp[r][c] = null;
+                        tempExt[m.r][m.c] = tempExt[r][c]; tempExt[r][c] = null;
+                    }
+                } else {
+                    temp[m.r][m.c] = temp[r][c]; temp[r][c] = null;
+                    tempExt[m.r][m.c] = tempExt[r][c]; tempExt[r][c] = null;
+                    if (m.enPassant) temp[m.r + (color === 'w' ? 1 : -1)][m.c] = null;
+                }
+                return !isCheck(color, temp, tempExt);
+            }).concat(typeOfCastle(r, c, currentBoard, color, rights, currentExt));
+        }
+
+        function typeOfCastle(r, c, currentBoard, color, rights, currentExt) {
+            if (currentBoard[r][c][1] !== 'k' || isCheck(color, currentBoard)) return [];
+            const l = [], rank = color === 'w' ? 7 : 0, rts = rights[color];
+            if (rts.k && !currentBoard[rank][5] && !currentBoard[rank][6] && !isSquareAttacked(rank, 5, color, currentBoard, currentExt) && !isSquareAttacked(rank, 6, color, currentBoard, currentExt)) l.push({ r: rank, c: 6, castle: 'k' });
+            if (rts.q && !currentBoard[rank][1] && !currentBoard[rank][2] && !currentBoard[rank][3] && !isSquareAttacked(rank, 3, color, currentBoard, currentExt) && !isSquareAttacked(rank, 2, color, currentBoard, currentExt)) l.push({ r: rank, c: 2, castle: 'q' });
+            return l;
+        }
+
+        function isCheck(color, b = board, ext = extBoard) {
+            let k = null;
+            for (let r=0; r<8; r++) for (let c=0; c<8; c++) if (b[r][c] === color+'k') k = {r,c};
+            return k ? isSquareAttacked(k.r, k.c, color, b, ext) : false;
+        }
+
+        function isSquareAttacked(r, c, defColor, b, ext) {
+            const opp = defColor === 'w' ? 'b' : 'w';
+            for (let row=0; row<8; row++) for (let col=0; col<8; col++) if (b[row][col] && b[row][col][0] === opp && getPseudoMoves(row, col, b, null, ext).some(m => m.r === r && m.c === c)) return true;
+            return false;
+        }
+
+        function makeMove(fr, fc, tr, tc, move) {
+            stateHistory.push({
+                board: board.map(row => [...row]),
+                extBoard: extBoard.map(row => [...row].map(o => o ? {...o} : null)),
+                deadOriginalQueens: { ...deadOriginalQueens },
+                turn: turn,
+                castlingRights: { w: { ...castlingRights.w }, b: { ...castlingRights.b } },
+                enPassantTarget: enPassantTarget ? { ...enPassantTarget } : null,
+                lastMove: lastMove ? { from: { ...lastMove.from }, to: { ...lastMove.to } } : null,
+                whiteScore: whiteScore,
+                blackScore: blackScore
+            });
+
+            const piece = board[fr][fc], captured = board[tr][tc];
+            
+            let pts = 0;
+            let capturedPiece = captured;
+            let capturedExtObj = extBoard[tr][tc];
+
+            if (move.enPassant) {
+                const epR = tr + (turn === 'w' ? 1 : -1);
+                capturedPiece = board[epR][tc];
+                capturedExtObj = extBoard[epR][tc];
+                board[epR][tc] = null;
+                extBoard[epR][tc] = null;
+            }
+
+            if (move.special) {
+                if (move.special === 'toggle_invulnerable') {
+                    extBoard[fr][fc].invulnerable = !extBoard[fr][fc].invulnerable;
+                    addHistoryLog(`Rook Shield ${extBoard[fr][fc].invulnerable ? 'On' : 'Off'}`);
+                } else if (move.special === 'revive_queen') {
+                    board[fr][fc] = turn + 'q';
+                    extBoard[fr][fc] = { originalQueen: true, promoted: false };
+                    deadOriginalQueens[turn] = false;
+                    addHistoryLog(`Bishop sacrifices to Revive Queen!`);
+                } else if (move.special === 'spawn_pawn') {
+                    board[tr][tc] = turn + 'p';
+                    extBoard[tr][tc] = null;
+                    addHistoryLog(`King spawns pawn at ${String.fromCharCode(97+tc)}${8-tr}`);
+                } else {
+                    if (capturedPiece) {
+                        pts = getPieceValue(capturedPiece[1], capturedExtObj?.promoted);
+                        if (turn === 'w') whiteScore += pts; else blackScore += pts;
+                        if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = true;
+                    }
+                    board[tr][tc] = piece; board[fr][fc] = null;
+                    extBoard[tr][tc] = extBoard[fr][fc]; extBoard[fr][fc] = null;
+                    addHistoryLog(`Special Teleport ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
+                }
+            } else {
+                if (capturedPiece) {
+                    pts = getPieceValue(capturedPiece[1], capturedExtObj?.promoted);
+                    if (turn === 'w') whiteScore += pts; else blackScore += pts;
+                    if (capturedExtObj?.originalQueen) deadOriginalQueens[capturedPiece[0]] = true;
+                }
+                
+                board[tr][tc] = piece; board[fr][fc] = null;
+                extBoard[tr][tc] = extBoard[fr][fc]; extBoard[fr][fc] = null;
+                
+                if (move.castle === 'k') { board[tr][5] = turn+'r'; board[tr][7] = null; extBoard[tr][5] = extBoard[tr][7]; extBoard[tr][7] = null; }
+                if (move.castle === 'q') { board[tr][3] = turn+'r'; board[tr][0] = null; extBoard[tr][3] = extBoard[tr][0]; extBoard[tr][0] = null; }
+                
+                let newPiece = board[tr][tc];
+                if (newPiece && !extBoard[tr][tc]?.promoted) {
+                    if ((turn === 'w' && tr === 0) || (turn === 'b' && tr === 7)) {
+                        if (!extBoard[tr][tc]) extBoard[tr][tc] = {};
+                        extBoard[tr][tc].promoted = true;
+                        if (newPiece[1] === 'p') board[tr][tc] = turn + 'q';
+                        addHistoryLog(`${newPiece[1] === 'c' ? 'Commander' : 'Piece'} Promoted!`);
+                    }
+                }
+            }
+
+            moveHistory.push({ from: {r:fr, c:fc}, to: {r:tr, c:tc}, piece });
+            if (!move.special) addHistoryLog(`${String.fromCharCode(97+fc)}${8-fr} ➔ ${String.fromCharCode(97+tc)}${8-tr}`);
+            lastMove = { from: {r:fr, c:fc}, to: {r:tr, c:tc} };
+            
+            if (piece === 'wk') castlingRights.w = { k: false, q: false };
+            if (piece === 'bk') castlingRights.b = { k: false, q: false };
+            if (fr === 7 && fc === 0) castlingRights.w.q = false;
+            if (fr === 7 && fc === 7) castlingRights.w.k = false;
+            if (fr === 0 && fc === 0) castlingRights.b.q = false;
+            if (fr === 0 && fc === 7) castlingRights.b.k = false;
+            
+            enPassantTarget = (piece[1] === 'p' && Math.abs(tr - fr) === 2) ? { r: (fr + tr) / 2, c: fc } : null;
+            turn = turn === 'w' ? 'b' : 'w';
+            
+            selectedSquare = null;
+            validMoves = [];
+
+            checkGameStatus();
+            render();
+            updateUI();
+        }
+
+        function checkGameStatus() {
+            let hasMoves = false;
+            for (let r=0; r<8; r++) for (let c=0; c<8; c++) if (board[r][c] && board[r][c][0] === turn && getLegalMoves(r, c, board, turn, castlingRights, enPassantTarget, extBoard).length > 0) hasMoves = true;
+            if (!hasMoves) showGameOver(isCheck(turn) ? 'Checkmate!' : 'Stalemate!', isCheck(turn) ? `${turn === 'w' ? 'Black' : 'White'} Wins` : 'Draw');
+        }
+
+        function updateUI() {
+            statusEl.innerText = `${turn === 'w' ? "White" : "Black"}'s Turn`;
+            if (isCheck(turn)) checkWarn.classList.remove('hidden'); else checkWarn.classList.add('hidden');
+            document.getElementById('move-count').innerText = `Moves: ${moveHistory.length}`;
+            calculateScores();
+            scoreWhiteEl.innerText = `Score: ${whiteScore}`;
+            scoreBlackEl.innerText = `Score: ${blackScore}`;
+        }
+
+        function addHistoryLog(s) {
+            const d = document.createElement('div');
+            d.className = 'p-1.5 bg-zinc-800/50 rounded border border-zinc-800/80 flex items-center justify-between';
+            d.innerHTML = `<span class="text-zinc-500 font-bold">${Math.ceil(moveHistory.length/2)}.</span> <span class="text-zinc-200 truncate pl-1">${s}</span>`;
+            historyEl.appendChild(d);
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        function showGameOver(t, d) {
+            document.getElementById('modal-title').innerText = t;
+            document.getElementById('modal-desc').innerText = d;
+            document.getElementById('game-over-modal').style.display = 'flex';
+        }
+
+    const historyModal = document.getElementById('history-modal');
+    const rulesModal = document.getElementById('rules-modal');
+    
+    document.getElementById('history-btn').onclick = () => historyModal.style.display = 'flex';
+    document.getElementById('close-history').onclick = () => historyModal.style.display = 'none';
+    
+    document.getElementById('rules-btn').onclick = () => rulesModal.style.display = 'flex';
+    document.getElementById('close-rules').onclick = () => rulesModal.style.display = 'none';
+
+        document.getElementById('reset-btn').onclick = initGame;
+        document.getElementById('modal-reset').onclick = () => { document.getElementById('game-over-modal').style.display = 'none'; initGame(); };
+        document.getElementById('undo-btn').onclick = () => {
+            if (stateHistory.length === 0) return;
+            const prevState = stateHistory.pop();
+            board = prevState.board;
+            extBoard = prevState.extBoard;
+            deadOriginalQueens = prevState.deadOriginalQueens;
+            turn = prevState.turn;
+            castlingRights = prevState.castlingRights;
+            enPassantTarget = prevState.enPassantTarget;
+            lastMove = prevState.lastMove;
+            
+            moveHistory.pop();
+            if (historyEl.lastChild) historyEl.removeChild(historyEl.lastChild);
+            
+            selectedSquare = null;
+            validMoves = [];
+            
+            render();
+            updateUI();
+        };
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
