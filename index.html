@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Chess Pro Mobile</title>
+    <title>Chess Evolution</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         body { 
@@ -40,16 +41,16 @@
             min-height: 0;
         }
 
-        .square.light { background-color: #eeeed2; }
-        .square.dark { background-color: #769656; }
+        .square.light { background-color: #eed2d2; }
+        .square.dark { background-color: #965683; }
         .square.selected { background-color: #f6f669 !important; }
-        .square.last-move { background-color: rgba(246, 246, 105, 0.4); }
+        .square.last-move { background-color: rgba(105, 131, 246, 0.4); }
         
         .square.valid-move::after { 
             content: ""; 
             width: 25%; 
             height: 25%; 
-            background: rgba(0, 0, 0, 0.15); 
+            background: rgba(0, 0, 0, 0.45); 
             border-radius: 50%; 
         }
         
@@ -278,6 +279,34 @@
         </div>
     </div>
 
+    <!-- Multiplayer Modal -->
+    <div id="multiplayer-modal" class="fixed inset-0 bg-black/95 flex flex-col items-center justify-center z-[100] p-6 backdrop-blur-md">
+        <div class="bg-zinc-900 flex flex-col rounded-3xl border border-zinc-800 w-full max-w-sm shadow-2xl p-6 text-center gap-6">
+            <h1 class="text-2xl font-black text-white">Chess Evolution</h1>
+            
+            <button id="btn-local" class="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl transition-all btn-active border border-zinc-700 shadow-lg text-sm">
+                Play on Same Device
+            </button>
+
+            <div class="text-zinc-600 font-black text-xs">OR ONLINE MULTIPLAYER</div>
+            
+            <div class="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/50">
+                <p class="text-sm text-zinc-400 font-bold mb-2">Host a Game</p>
+                <p class="text-xs text-zinc-500 mb-3">Your Game ID (Send this to your friend)</p>
+                <div id="my-peer-id" class="text-lg font-mono font-black text-yellow-400 bg-zinc-950 p-3 rounded-lg mb-4 select-all break-all">Generating...</div>
+                <p id="host-status" class="text-sm font-bold text-zinc-300 animate-pulse hidden">Waiting for opponent...</p>
+            </div>
+
+            <div class="bg-zinc-800/50 p-4 rounded-xl border border-zinc-700/50">
+                <p class="text-sm text-zinc-400 font-bold mb-3">Join a Game</p>
+                <input type="text" id="join-id-input" placeholder="Paste friend's ID here" class="w-full bg-zinc-950 text-white text-center font-mono p-3 rounded-lg border border-zinc-700 mb-4 focus:outline-none focus:border-yellow-400 text-sm">
+                <button id="btn-join" class="w-full py-3 bg-white hover:bg-zinc-200 text-black font-bold rounded-xl transition-all btn-active shadow-xl shadow-white/10 text-sm">
+                    Connect & Play
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const PIECES = {
             w: {
@@ -326,6 +355,12 @@
         let enPassantTarget = null;
         let lastMove = null;
 
+        // Network Variables
+        let peer = null;
+        let conn = null;
+        let myColor = 'w'; // Host is White, Joiner is Black
+        let isMultiplayer = false;
+
         const boardEl = document.getElementById('board');
         const statusEl = document.getElementById('game-status');
         const historyEl = document.getElementById('move-history');
@@ -368,7 +403,7 @@
         }
 
         // Initializes a new game by resetting the board, pieces, turns, and all tracking variables
-        function initGame() {
+        function initGame(cmdFile = null) {
             board = [
                 ['br', 'bn', 'bb', 'bq', 'bk', 'bb', 'bn', 'br'],
                 ['bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp', 'bp'],
@@ -384,7 +419,7 @@
             extBoard[7][3] = { originalQueen: true };
             extBoard[0][3] = { originalQueen: true };
             
-            const CmdFile = Math.floor(Math.random() * 8);
+            const CmdFile = cmdFile !== null ? cmdFile : Math.floor(Math.random() * 8);
             board[6][CmdFile] = 'wc'; extBoard[6][CmdFile] = { isCommander: true };
             board[1][CmdFile] = 'bc'; extBoard[1][CmdFile] = { isCommander: true };
             
@@ -463,6 +498,9 @@
 
         // Processes click events on the board squares to select pieces or execute moves
         function handleSquareClick(r, c) {
+            // Do not allow clicking if it's not your turn in multiplayer
+            if (isMultiplayer && turn !== myColor) return;
+            
             const piece = board[r][c];
             const matchingMoves = validMoves.filter(m => m.r === r && m.c === c);
             
@@ -480,7 +518,8 @@
                 return;
             }
 
-            if (piece && piece[0] === turn) {
+            // Restrict clicking if it's not your turn OR you click the wrong color
+            if (piece && piece[0] === turn && (!isMultiplayer || turn === myColor)) {
                 if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) {
                     selectedSquare = null;
                     validMoves = [];
@@ -757,7 +796,7 @@
                 extBoard[epR][tc] = null;
             }
 
-            const finalizeMove = (promotedMsg = null) => {
+            const finalizeMove = (promotedMsg = null, chosenType = null, isEvolved = false) => {
                 moveHistory.push({ from: {r:fr, c:fc}, to: {r:tr, c:tc}, piece });
                 if (promotedMsg) {
                     addHistoryLog(`${String.fromCharCode(97+fc)}${8-fr} ➔ ${String.fromCharCode(97+tc)}${8-tr} (${promotedMsg})`);
@@ -782,6 +821,18 @@
                 checkGameStatus();
                 render();
                 updateUI();
+
+                // --- NETWORK SEND ---
+                // If we just made this move locally, send it to the other phone
+                if (isMultiplayer && turn !== myColor) {
+                    conn.send({
+                        type: 'move',
+                        fr: fr, fc: fc, tr: tr, tc: tc,
+                        moveObj: move,
+                        promotedType: chosenType,
+                        isEvolved: isEvolved
+                    });
+                }
             };
 
             if (move.special) {
@@ -841,7 +892,7 @@
                                 
                                 if (chosenType === 'q' && isEvolved) extBoard[tr][tc].originalQueen = true;
                                 
-                                finalizeMove(`Promoted to ${logName}`);
+                                finalizeMove(`Promoted to ${logName}`, chosenType, isEvolved);
                             });
                             return; // Halt execution until modal callback finishes
                         } else if (!extBoard[tr][tc].cannotEvolve && (newPiece[1] !== 'q' || extBoard[tr][tc].originalQueen)) {
@@ -854,13 +905,31 @@
                             if (newPiece[1] === 'k') evolvedName = 'Tyran';
                             if (newPiece[1] === 'q') evolvedName = 'Monarch';
                             
-                            finalizeMove(`Evolved to ${evolvedName}`);
+                            finalizeMove(`Evolved to ${evolvedName}`, newPiece[1], true);
                             return;
                         }
                     }
                 }
                 finalizeMove();
             }
+        }
+
+        function applyNetworkMove(fr, fc, tr, tc, moveObj, promotedType, isEvolved) {
+            // If the opponent promoted a piece, we apply it instantly before running makeMove
+            if (promotedType) {
+                // We override the makeMove promotion flow by pre-setting the board state 
+                // to bypass the local modal popup on the receiving end.
+                const color = board[fr][fc][0];
+                board[fr][fc] = color + promotedType;
+                if (!extBoard[fr][fc]) extBoard[fr][fc] = {};
+                extBoard[fr][fc].promoted = isEvolved;
+                if (!isEvolved) extBoard[fr][fc].cannotEvolve = true;
+                if (promotedType === 'c') extBoard[fr][fc].isCommander = true;
+                if (promotedType === 'q' && isEvolved) extBoard[fr][fc].originalQueen = true;
+            }
+            
+            // Execute the move exactly as the opponent did
+            makeMove(fr, fc, tr, tc, moveObj || {});
         }
 
         // Checks if the current player has any legal moves left to determine Checkmate or Stalemate
@@ -905,8 +974,13 @@
     document.getElementById('rules-btn').onclick = () => rulesModal.style.display = 'flex';
     document.getElementById('close-rules').onclick = () => rulesModal.style.display = 'none';
 
-        document.getElementById('reset-btn').onclick = initGame;
-        document.getElementById('undo-btn').onclick = () => {
+        document.getElementById('reset-btn').onclick = () => {
+            const newCmdFile = Math.floor(Math.random() * 8);
+            if (isMultiplayer) conn.send({ type: 'reset', cmdFile: newCmdFile });
+            initGame(newCmdFile);
+        };
+
+        function performUndo() {
             if (stateHistory.length === 0) return;
             const prevState = stateHistory.pop();
             board = prevState.board;
@@ -926,9 +1000,79 @@
             
             render();
             updateUI();
+        }
+
+        document.getElementById('undo-btn').onclick = () => {
+            if (isMultiplayer) conn.send({ type: 'undo' });
+            performUndo();
         };
 
-        window.onload = initGame;
+        function initMultiplayer() {
+            // Generate a random 5-character ID for easy typing
+            const randomId = Math.random().toString(36).substring(2, 7).toUpperCase();
+            
+            peer = new Peer(`Chessevo-${randomId}`);
+        
+            peer.on('open', (id) => {
+                document.getElementById('my-peer-id').innerText = id;
+            });
+
+            // Handle Local Play
+            document.getElementById('btn-local').onclick = () => {
+                isMultiplayer = false;
+                document.getElementById('multiplayer-modal').style.display = 'none';
+                initGame();
+            };
+        
+            // Handle incoming connections (If you are the Host)
+            peer.on('connection', (connection) => {
+                conn = connection;
+                conn.on('open', () => {
+                    const initialCmdFile = Math.floor(Math.random() * 8);
+                    conn.send({ type: 'init', cmdFile: initialCmdFile });
+                    setupConnection('w', initialCmdFile);
+                    document.getElementById('host-status').innerText = "Opponent joined! Starting...";
+                    document.getElementById('host-status').classList.remove('hidden');
+                });
+                conn.on('data', handleNetworkData);
+            });
+        
+            // Handle joining (If you are the Guest)
+            document.getElementById('btn-join').onclick = () => {
+                const joinId = document.getElementById('join-id-input').value.trim();
+                if (!joinId) return;
+                
+                document.getElementById('btn-join').innerText = "Connecting...";
+                conn = peer.connect(joinId);
+                
+                conn.on('data', handleNetworkData);
+            };
+        }
+        
+        function handleNetworkData(data) {
+            if (data.type === 'init') {
+                setupConnection('b', data.cmdFile);
+            } else if (data.type === 'move') {
+                applyNetworkMove(data.fr, data.fc, data.tr, data.tc, data.moveObj, data.promotedType, data.isEvolved);
+            } else if (data.type === 'reset') {
+                initGame(data.cmdFile);
+            } else if (data.type === 'undo') {
+                performUndo();
+            }
+        }
+
+        function setupConnection(color, cmdFile) {
+            myColor = color;
+            isMultiplayer = true;
+            document.getElementById('multiplayer-modal').style.display = 'none';
+            
+            initGame(cmdFile);
+        }
+
+        window.onload = () => {
+            initMultiplayer();
+            // initGame() is now called after a connection is established inside setupConnection()
+        };
     </script>
 </body>
 </html>
