@@ -166,12 +166,12 @@
         </button>
     </footer>
 
-    <!-- Reclame Waarschuwing Modal (Google AdSense Ready) -->
+    <!-- Advertisement Warning Modal (Google AdSense Ready) -->
     <div id="ad-warning-modal" class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[200] p-4 backdrop-blur-md">
         <div class="bg-zinc-900 flex flex-col items-center justify-center rounded-3xl border border-zinc-800 w-full max-w-sm p-8 shadow-2xl text-center">
             <svg class="w-12 h-12 text-yellow-400 mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-            <h2 id="ad-title" class="text-xl font-black text-white mb-2">Korte Pauze</h2>
-            <p id="ad-text" class="text-zinc-400 text-sm mb-4">Er wordt een advertentie geladen om dit spel gratis te houden...</p>
+            <h2 id="ad-title" class="text-xl font-black text-white mb-2">Short Break</h2>
+            <p id="ad-text" class="text-zinc-400 text-sm mb-4">An advertisement is loading to keep this game free...</p>
             <div id="ad-progress-container" class="w-full bg-zinc-800 rounded-full h-2 mb-2 overflow-hidden">
                 <div id="ad-progress" class="bg-yellow-400 h-2 rounded-full w-0 transition-all duration-1000"></div>
             </div>
@@ -181,7 +181,7 @@
             <div id="adsense-container" class="hidden w-full mt-4 bg-zinc-800/50 rounded-xl overflow-hidden flex justify-center items-center min-h-[100px]">
                 <ins class="adsbygoogle" style="display:block; width:100%; height:100%;" data-ad-client="ca-pub-9939310173056740" data-ad-slot="7726617824" data-ad-format="auto" data-full-width-responsive="true"></ins>
             </div>
-            <button id="close-ad-btn" class="hidden mt-6 w-full py-3 bg-white hover:bg-zinc-200 text-black font-bold rounded-xl transition-all btn-active text-sm">Verder spelen</button>
+            <button id="close-ad-btn" class="hidden mt-6 w-full py-3 bg-white hover:bg-zinc-200 text-black font-bold rounded-xl transition-all btn-active text-sm">Continue Playing</button>
         </div>
     </div>
 
@@ -381,9 +381,9 @@
         let myColor = 'w'; // Host is White, Joiner is Black
         let isMultiplayer = false;
 
-        let undoCountThisGame = 0; // Houdt bij hoe vaak er op undo is geklikt deze sessie
+        let undoCountThisGame = 0; // Tracks how many times undo has been clicked this session
         
-        // De hoofdfunctie die de waarschuwing toont en Google AdSense afvuurt
+        // The main function that displays the advertisement warning modal and triggers Google AdSense
         function triggerAdSequence(reden, callback = null) {
             const adModal = document.getElementById('ad-warning-modal');
             const countdownEl = document.getElementById('ad-countdown');
@@ -400,8 +400,8 @@
             progressContainer.style.display = 'block';
             countdownEl.style.display = 'block';
             
-            adTitle.innerText = "Korte Pauze";
-            adText.innerText = "Er wordt een advertentie geladen om dit spel gratis te houden...";
+            adTitle.innerText = "Short Break";
+            adText.innerText = "An advertisement is loading to keep this game free...";
             
             let timeLeft = 3;
             progressEl.style.width = '0%';
@@ -415,18 +415,35 @@
                     clearInterval(interval);
                     countdownEl.style.display = "none";
                     progressContainer.style.display = "none";
-                    adTitle.innerText = "Advertentie";
-                    adText.innerText = "Bedankt voor je geduld!";
+                    adTitle.innerText = "Advertisement";
+                    adText.innerText = "Thank you for your patience!";
                     
+                    // 1. Empty the container to remove old iframes
+                    adsenseContainer.innerHTML = '';
+                    
+                    // 2. Construct the tag properly using the DOM API (required for dynamic AdSense)
+                    const ins = document.createElement('ins');
+                    ins.className = 'adsbygoogle';
+                    ins.style.display = 'block';
+                    ins.style.width = '100%';
+                    ins.style.minHeight = '100px'; // Ensure the container doesn't collapse
+                    ins.dataset.adClient = 'ca-pub-9939310173056740';
+                    ins.dataset.adSlot = '7726617824';
+                    ins.dataset.adFormat = 'auto';
+                    ins.dataset.fullWidthResponsive = 'true';
+                    
+                    adsenseContainer.appendChild(ins);
                     adsenseContainer.classList.remove('hidden');
                     
-                    try { (adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { console.error("AdSense Error", e); }
+                    // 3. Trigger AdSense
+                    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { console.error("AdSense Error", e); }
                     
                     setTimeout(() => { closeAdBtn.classList.remove('hidden'); }, 3000);
                     
                     closeAdBtn.onclick = () => {
                         adModal.style.display = 'none';
-                        adsenseContainer.innerHTML = `<ins class="adsbygoogle" style="display:block; width:100%; height:100%;" data-ad-client="ca-pub-9939310173056740" data-ad-slot="7726617824" data-ad-format="auto" data-full-width-responsive="true"></ins>`;
+                        // Immediately empty the container upon closing to prevent memory leaks
+                        adsenseContainer.innerHTML = ''; 
                         if (callback) callback();
                     };
                 }
@@ -1016,9 +1033,9 @@
             if (!hasMoves) {
                 showGameOver(isCheck(turn) ? 'Checkmate!' : 'Stalemate!', isCheck(turn) ? `${turn === 'w' ? 'Black' : 'White'} Wins` : 'Draw');
                 
-                // AD TRIGGER: Na een Checkmate
+                // AD TRIGGER: After a Checkmate
                 if (isCheck(turn)) {
-                    // Wacht 2 seconden zodat de speler de checkmate kan zien, speel dan de ad
+                    // Wait 2 seconds so the player can see the checkmate, then play the ad
                     setTimeout(() => { triggerAdSequence('checkmate'); }, 2000);
                 }
             }
@@ -1064,14 +1081,14 @@
                 const newCmdFile = Math.floor(Math.random() * 8);
                 if (isMultiplayer) conn.send({ type: 'reset', cmdFile: newCmdFile });
                 initGame(newCmdFile);
-                undoCountThisGame = 0; // Reset de undo teller voor het nieuwe potje
+                undoCountThisGame = 0; // Reset the undo counter for the new game
             };
         
-            // AD TRIGGER: Reset na meer dan 25 moves
+            // AD TRIGGER: Reset after more than 25 moves
             if (moveHistory.length > 25) {
                 triggerAdSequence('reset', performReset);
             } else {
-                performReset(); // Geen ad, reset direct
+                performReset(); // No ad, reset immediately
             }
         };
 
@@ -1105,16 +1122,16 @@
                 performUndo();
             };
         
-            undoCountThisGame++; // Hoog de teller op
+            undoCountThisGame++; // Increment the counter
             
-            // AD TRIGGER: Na exact 25 undos
+            // AD TRIGGER: After exactly 25 undos
             if (undoCountThisGame >= 25) {
                 triggerAdSequence('undo', () => {
-                    undoCountThisGame = 0; // Zet teller weer op 0 ná de advertentie
+                    undoCountThisGame = 0; // Reset counter back to 0 after the advertisement
                     performUndoAction();
                 });
             } else {
-                performUndoAction(); // Geen ad, voer undo direct uit
+                performUndoAction(); // No ad, perform undo immediately
             }
         };
 
